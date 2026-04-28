@@ -1,0 +1,90 @@
+# Singularity container for mVMC-mini GPU port work
+#
+# Build:
+#   singularity build mVMC-gpu.sif container.def
+#
+# Build mVMC-mini (bind-mount the repo):
+#   singularity exec --nv --bind /path/to/mVMC-mini:/work mVMC-gpu.sif \
+#       bash -c "cd /work && make nvhpc"
+#
+# Run benchmark:
+#   singularity exec --nv --bind /path/to/mVMC-mini:/work mVMC-gpu.sif \
+#       bash -c "cd /work && make large NRANKS=8"
+#
+# Claude Code (ANTHROPIC_API_KEY is passed through from the host environment):
+#   singularity exec --bind /path/to/mVMC-mini:/work mVMC-gpu.sif \
+#       bash -c "cd /work && claude"
+
+Bootstrap: docker
+From: nvcr.io/nvidia/nvhpc:24.11-devel-cuda12.6-ubuntu22.04
+
+%post
+    # Basic build tools and LAPACK
+    apt-get update -y
+    apt-get install -y --no-install-recommends \
+        git \
+        make \
+        curl \
+        ca-certificates \
+        libopenblas-dev
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+    # Claude Code — install to a fixed location so all users can access it
+    curl -fsSL https://claude.ai/install.sh | bash
+    # The installer puts the binary under $HOME/.local/bin; promote to system PATH
+    find /root -name "claude" -type f 2>/dev/null | head -1 | \
+        xargs -I{} cp {} /usr/local/bin/claude || true
+    chmod +x /usr/local/bin/claude
+
+%environment
+    # NVIDIA HPC SDK 24.11 paths (supplement what the base image already sets)
+    NVHPC_ROOT=/opt/nvidia/hpc_sdk/Linux_x86_64/24.11
+    export PATH=${NVHPC_ROOT}/compilers/bin:${NVHPC_ROOT}/comm_libs/mpi/bin:${NVHPC_ROOT}/cuda/bin:${PATH}
+    export LD_LIBRARY_PATH=${NVHPC_ROOT}/compilers/lib:${NVHPC_ROOT}/comm_libs/mpi/lib:${NVHPC_ROOT}/math_libs/lib64:${LD_LIBRARY_PATH}
+    export NVHPC_ROOT
+
+    # Suppress OpenMPI shared-memory warning inside containers
+    export OMPI_MCA_btl_vader_single_copy_mechanism=none
+
+    # ANTHROPIC_API_KEY is NOT set here — Singularity passes host environment
+    # variables through by default, so set it on the host before invoking.
+
+%test
+    echo "=== Compiler versions ==="
+    nvc --version
+    nvfortran --version
+    mpicc --version
+    echo "=== Claude Code ==="
+    claude --version
+
+%runscript
+    exec "$@"
+
+%labels
+    Version 1.0
+    HPC_SDK 24.11
+    CUDA 12.6
+    Description NVIDIA HPC SDK + OpenACC + Claude Code for mVMC-mini GPU port
+
+%help
+    This container provides:
+      - NVIDIA HPC SDK 24.11 (nvc, nvfortran, mpicc, mpif90)
+      - CUDA 12.6 toolkit
+      - OpenBLAS (BLAS/LAPACK for -D_lapack builds)
+      - Claude Code CLI
+
+    Build the container:
+      singularity build mVMC-gpu.sif container.def
+
+    Build mVMC-mini with OpenACC (--nv required for GPU):
+      singularity exec --nv --bind $(pwd):/work mVMC-gpu.sif \
+          bash -c "cd /work && make nvhpc"
+
+    Run the large GPU benchmark:
+      singularity exec --nv --bind $(pwd):/work mVMC-gpu.sif \
+          bash -c "cd /work && make large NRANKS=8"
+
+    Use Claude Code (API key comes from host environment):
+      singularity exec --bind $(pwd):/work mVMC-gpu.sif \
+          bash -c "cd /work && claude"
