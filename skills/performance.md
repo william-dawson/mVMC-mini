@@ -37,7 +37,7 @@ cat Lx4Ly4_J1.0/zvo_HitachiTimer.dat
 
 ### Middle (production benchmark)
 
-The reference configuration uses 128 MPI ranks × 8 OpenMP threads (matching the K computer job script). Adjust to your available hardware — ensure `nranks` is a multiple of `NSplitSize=4`.
+The reference configuration uses 128 MPI ranks × 8 OpenMP threads. Adjust to your available hardware — ensure `nranks` is a multiple of `NSplitSize=4`.
 
 ```bash
 cd job_middle
@@ -158,46 +158,23 @@ for t in 1 2 4 8; do
 done
 ```
 
-Also extract per-kernel times to see which routines actually benefit:
+Also extract per-kernel speedup to see which routines actually benefit. Save the timer file from each run (e.g. `timer_t1.dat`, `timer_t4.dat`) then:
 
 ```bash
-echo "Kernel                  | 1t | 2t | 4t | 8t | Speedup(1→4)"
 for kernel in "UpdateMAllTwo " "CalculateNewPfMTwo2" "UpdateMAll " "CalculateMAll "; do
-  # collect timer_t{n}.dat from each run above, then:
   t1=$(grep "$kernel" timer_t1.dat | awk '{print $NF}')
   t4=$(grep "$kernel" timer_t4.dat | awk '{print $NF}')
-  echo "$kernel: $(awk "BEGIN {printf \"%.2fx\", $t1/$t4}")"
+  printf "%-25s %s\n" "$kernel" "$(awk "BEGIN {printf \"%.2fx\", $t1/$t4}")"
 done
 ```
 
-### Observed results on Intel i5-8279U (4 physical / 8 HT cores)
-
-Wall time and speedup for `job_tiny`:
-
-| Threads | Wall (s) | Speedup | Efficiency |
-|---------|----------|---------|------------|
-| 1       | 5.63     | 1.00×   | 100%       |
-| 2       | 3.21     | 1.75×   | 88%        |
-| 4       | 2.44     | 2.30×   | 58%        |
-| 8       | 2.58     | 2.18×   | **27%**    |
-
-Per-kernel speedup (1 → 4 threads):
-
-| Kernel | 1t (s) | 4t (s) | Speedup |
-|---|---|---|---|
-| `UpdateMAllTwo` | 1.775 | 0.601 | **2.95×** |
-| `CalculateMAll` | 1.362 | 0.521 | 2.61× |
-| `CalculateNewPfMTwo2` | 1.155 | 0.461 | 2.51× |
-| `LocEnergyCal` | 0.328 | 0.140 | 2.35× |
-| `UpdateMAll` | 0.188 | 0.082 | 2.28× |
-
 ### Interpreting thread scaling results
 
-**The kernels scale well (2.3–3.0×), but overall wall time only reaches 2.3×.** The gap is the serial bookkeeping between kernels — move proposal, acceptance logic, electron config updates — which accounts for roughly 15% of single-thread time. By Amdahl's law this caps scaling at ~6× regardless of thread count.
+**Expect per-kernel speedup to exceed overall wall-time speedup.** The hot kernels (`UpdateMAllTwo`, `CalculateMAll`, `CalculateNewPfMTwo2`) parallelize well. The gap between kernel speedup and overall speedup comes from serial bookkeeping — move proposal, acceptance logic, electron config bookkeeping — which is not parallelized. By Amdahl's law, this serial fraction sets an absolute ceiling on thread scaling regardless of core count.
 
-**Hyperthreading hurts.** Going 4→8 threads on this CPU slightly *increases* wall time (2.44s → 2.58s). These kernels are compute and memory bound; two HT threads compete for the same execution units and L1/L2 cache. Always run at `OMP_NUM_THREADS = physical core count`, not logical.
+**Hyperthreading typically hurts.** These kernels are compute- and memory-bandwidth-bound. Two HT threads sharing the same physical core compete for execution units and cache, often giving no benefit or a regression over the physical-core count. Start with `OMP_NUM_THREADS = physical core count`; only try higher if you measure an improvement.
 
-**What this means for GPU porting**: the individual kernels reach 2.5–3× on 4 CPU cores. GPU versions of `UpdateMAllTwo` and `CalculateMAll` would need to achieve >10× over the 4-thread CPU baseline to justify the offload overhead for Ne=32. At Ne=100 (middle case) the kernels are O(Ne²)–O(Ne³) and the arithmetic intensity is much higher, making GPU far more attractive there.
+**GPU porting implications**: the individual kernels do scale with thread count, but are limited by the serial fraction at high thread counts. `UpdateMAllTwo` and `CalculateMAll` are the primary GPU candidates — both are O(Ne²)–O(Ne³) with high arithmetic intensity at large Ne (middle case: Ne=100). The GPU breakeven point depends on offload latency vs. compute savings; it becomes attractive as Ne grows.
 
 ---
 
