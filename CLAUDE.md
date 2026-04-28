@@ -145,6 +145,7 @@ The `skills/` directory contains task-specific guides for AI agents:
 | `skills/compile.md` | `make <platform>` | Build `src/vmc.out` for a target platform |
 | `skills/test.md` | `make test` | Run correctness check against reference output |
 | `skills/performance.md` | `make perf` / `make bench` | Run with timing and interpret the hotspot profile |
+| `skills/openacc-port.md` | — | Plan and steps for porting hot kernels to GPU via OpenACC |
 
 ---
 
