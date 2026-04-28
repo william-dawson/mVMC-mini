@@ -12,19 +12,24 @@ Reference paper: Tahara & Imada, J. Phys. Soc. Jpn. 77, 114701 (2008).
 
 ## Build system
 
-All source lives in `src/`. The build selects a platform-specific Makefile:
+All source lives in `src/`. Build from the **repo root** using the top-level `Makefile`:
 
 ```bash
-cd src
-make intel      # Intel MPI + MKL
-make kei        # K computer / FX10 (Fujitsu)
-make kashiwa    # Kashiwa cluster
+make mac       # macOS: Apple Clang + Open MPI + Accelerate
+make intel     # Intel MPI + MKL
+make kei       # K computer / FX10 (Fujitsu)
+make kashiwa   # Kashiwa cluster
+make pgi       # PGI compiler
 make clean
 ```
 
-Each `Makefile_<platform>` sets `CC`, `FC`, `CFLAGS`, and `LIB` (LAPACK + ScaLAPACK). The skeleton is `Makefile_skeleton`. Output binary is `src/vmc.out`.
+Each `src/Makefile_<platform>` sets `CC`, `FC`, `CFLAGS`, and `LIB`. The skeleton is `src/Makefile_skeleton`. Output binary is `src/vmc.out`.
 
-Dependencies: MPI, OpenMP, BLAS/LAPACK, ScaLAPACK, BLACS. On Intel: typically MKL covers all of these.
+Key build flags (set via `OPTION` in the platform Makefile):
+- `-D_mpi_use` — enable MPI; omit for a serial build (stubs in `vmcmain.h`)
+- `-D_lapack` — use serial LAPACK SR solver (`stcopt_dposv.c`) instead of ScaLAPACK; recommended for single-node development
+
+Dependencies: MPI, OpenMP, BLAS/LAPACK. ScaLAPACK + BLACS only needed without `-D_lapack`.
 
 The two bundled third-party libraries each have their own sub-Makefiles:
 - `src/pfapack/` — Pfaffian computation (Fortran)
@@ -32,10 +37,21 @@ The two bundled third-party libraries each have their own sub-Makefiles:
 
 ---
 
-## Running
+## Running and testing
+
+The top-level `Makefile` provides workflow targets:
 
 ```bash
-vmc.out <multiDir.def>
+make test                          # run job_tiny, verify against reference output
+make perf [NRANKS=N] [NTHREADS=N]  # run job_tiny, print timer + hotspot ratios
+make bench [NRANKS=N] [NTHREADS=N] # run job_middle, print timer + hotspot ratios
+```
+
+`NRANKS` and `NTHREADS` default to 1. `make test` always runs with 1 rank and 1 thread for deterministic reference comparison.
+
+To run the binary directly:
+```bash
+src/vmc.out <multiDir.def>
 ```
 
 `multiDir.def` lists one or more job directories. Each job directory has:
@@ -44,11 +60,13 @@ vmc.out <multiDir.def>
 - `zlocspn.def`, `zinteraction.def`, `zcisajs.def`, `zcisajscktalt.def` — Hamiltonian/observable definitions
 - `zgutzwilleridx.def`, `zqptransidx.def` — variational parameter index maps
 
-Two test sizes are included:
-- `job_tiny/` — 32-site system, runs in ~12s on a single Intel node
-- `job_middle/` — medium size, ~4 min on 128 K-computer nodes
+Two benchmark cases are included:
+- `job_tiny/` — 32-site system (4×4 Kondo lattice, Ne=16), runs in a few seconds single-rank
+- `job_middle/` — 200-site system (10×10 Kondo lattice, Ne=100), reference config: 128 ranks × 8 threads
 
-Output files: `zvo_out_*.dat` (energy per SR step), `zvo_var_*.dat` (variational parameters), timing info.
+Reference output for correctness checking lives in `result/`.
+
+Output files per job: `zvo_out_*.dat` (energy per SR step), `zvo_var_*.dat` (variational parameters), `zvo_HitachiTimer.dat` (hierarchical timer).
 
 **NVMCCalMode**: `0` = parameter optimization (SR loop), `1` = expectation value calculation with fixed parameters.
 
@@ -115,6 +133,18 @@ Monte Carlo is embarrassingly parallel across groups. SR optimization uses ScaLA
 | `NVMCSample` | MC samples per MPI group per step |
 | `NSplitSize` | MPI ranks per MC group |
 | `RndSeed` | RNG seed (offset by group index at runtime) |
+
+---
+
+## Agent skills
+
+The `skills/` directory contains task-specific guides for AI agents:
+
+| Skill | Command | What it does |
+|---|---|---|
+| `skills/compile.md` | `make <platform>` | Build `src/vmc.out` for a target platform |
+| `skills/test.md` | `make test` | Run correctness check against reference output |
+| `skills/performance.md` | `make perf` / `make bench` | Run with timing and interpret the hotspot profile |
 
 ---
 
