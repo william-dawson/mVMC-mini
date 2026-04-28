@@ -10,7 +10,7 @@ REF    := result/Lx4Ly4_J1.0
 NRANKS   ?= 1
 NTHREADS ?= 1
 
-.PHONY : mac intel kei kashiwa pgi clean test perf bench large
+.PHONY : mac intel nvhpc nvhpc-gpu kei kashiwa pgi clean test perf bench large
 
 # ---- Build targets (delegate to src/) ----
 
@@ -19,6 +19,12 @@ mac :
 
 intel :
 	$(MAKE) -C src -f Makefile_intel
+
+nvhpc :
+	$(MAKE) -C src -f Makefile_nvhpc
+
+nvhpc-gpu :
+	$(MAKE) -C src -f Makefile_nvhpc GPU_ARCH=$(GPU_ARCH)
 
 kei fx :
 	$(MAKE) -C src -f Makefile_kei

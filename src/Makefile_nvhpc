@@ -1,0 +1,47 @@
+# NVIDIA HPC SDK (nvc / nvfortran / NVHPC-bundled MPI)
+#
+# Phase 0 — CPU build, verify correctness before adding OpenACC:
+#   make nvhpc
+#
+# Phase 1+ — GPU offload (set GPU_ARCH to match your hardware):
+#   make nvhpc GPU_ARCH=cc80   # A100
+#   make nvhpc GPU_ARCH=cc90   # H100
+#   make nvhpc GPU_ARCH=cc70   # V100
+
+FC = mpif90
+CC = mpicc
+
+GPU_ARCH ?=
+
+ifdef GPU_ARCH
+ACC_FLAGS = -acc=gpu -gpu=$(GPU_ARCH) -Minfo=accel
+else
+ACC_FLAGS =
+endif
+
+CFLAGS  = -O3 -mp $(ACC_FLAGS)
+FFLAGS  = -O3 -mp $(ACC_FLAGS) -Mnomain
+OPTION  = -D_mpi_use -D_lapack
+
+LIB = -lopenblas
+
+OUT  = vmc.out
+SRC  = vmcmain.c
+PFAPACK = pfapack/libpfapack.a
+SFMT    = sfmt/SFMT.o
+OBJS    = vmcmain.o $(PFAPACK) $(SFMT)
+
+.PHONY : all pfapack sfmt
+all : vmc.out
+
+vmc.out : vmcmain.o pfapack sfmt
+	$(FC) -o $(OUT) $(OBJS) $(FFLAGS) $(LIB)
+
+vmcmain.o : *.c *.h
+	$(CC) -c $(SRC) $(OPTION) $(CFLAGS)
+
+pfapack :
+	$(MAKE) -C pfapack -f Makefile_nvhpc
+
+sfmt :
+	$(MAKE) -C sfmt -f Makefile_nvhpc
