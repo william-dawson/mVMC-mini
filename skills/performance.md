@@ -139,16 +139,78 @@ awk '
 
 ---
 
-## Step 5 — Scaling experiment
+## Step 5 — Thread scaling experiment
 
-To measure strong scaling (fixed problem, more resources):
+Run `job_tiny` repeatedly with increasing `OMP_NUM_THREADS` and collect `Timer[0]`:
+
+```bash
+cd job_tiny
+base_time=""
+echo "Threads | Wall(s) | Speedup | Efficiency"
+echo "--------|---------|---------|----------"
+for t in 1 2 4 8; do
+  OMP_NUM_THREADS=$t ../src/vmc.out multiDir.def 2>/dev/null
+  wall=$(awk '/^All / {print $NF}' Lx4Ly4_J1.0/zvo_HitachiTimer.dat)
+  if [ -z "$base_time" ]; then base_time=$wall; fi
+  speedup=$(awk "BEGIN {printf \"%.2f\", $base_time/$wall}")
+  eff=$(awk "BEGIN {printf \"%.0f%%\", 100*$base_time/($wall*$t)}")
+  echo "   $t    |  $wall  |  $speedup   | $eff"
+done
+```
+
+Also extract per-kernel times to see which routines actually benefit:
+
+```bash
+echo "Kernel                  | 1t | 2t | 4t | 8t | Speedup(1→4)"
+for kernel in "UpdateMAllTwo " "CalculateNewPfMTwo2" "UpdateMAll " "CalculateMAll "; do
+  # collect timer_t{n}.dat from each run above, then:
+  t1=$(grep "$kernel" timer_t1.dat | awk '{print $NF}')
+  t4=$(grep "$kernel" timer_t4.dat | awk '{print $NF}')
+  echo "$kernel: $(awk "BEGIN {printf \"%.2fx\", $t1/$t4}")"
+done
+```
+
+### Observed results on Intel i5-8279U (4 physical / 8 HT cores)
+
+Wall time and speedup for `job_tiny`:
+
+| Threads | Wall (s) | Speedup | Efficiency |
+|---------|----------|---------|------------|
+| 1       | 5.63     | 1.00×   | 100%       |
+| 2       | 3.21     | 1.75×   | 88%        |
+| 4       | 2.44     | 2.30×   | 58%        |
+| 8       | 2.58     | 2.18×   | **27%**    |
+
+Per-kernel speedup (1 → 4 threads):
+
+| Kernel | 1t (s) | 4t (s) | Speedup |
+|---|---|---|---|
+| `UpdateMAllTwo` | 1.775 | 0.601 | **2.95×** |
+| `CalculateMAll` | 1.362 | 0.521 | 2.61× |
+| `CalculateNewPfMTwo2` | 1.155 | 0.461 | 2.51× |
+| `LocEnergyCal` | 0.328 | 0.140 | 2.35× |
+| `UpdateMAll` | 0.188 | 0.082 | 2.28× |
+
+### Interpreting thread scaling results
+
+**The kernels scale well (2.3–3.0×), but overall wall time only reaches 2.3×.** The gap is the serial bookkeeping between kernels — move proposal, acceptance logic, electron config updates — which accounts for roughly 15% of single-thread time. By Amdahl's law this caps scaling at ~6× regardless of thread count.
+
+**Hyperthreading hurts.** Going 4→8 threads on this CPU slightly *increases* wall time (2.44s → 2.58s). These kernels are compute and memory bound; two HT threads compete for the same execution units and L1/L2 cache. Always run at `OMP_NUM_THREADS = physical core count`, not logical.
+
+**What this means for GPU porting**: the individual kernels reach 2.5–3× on 4 CPU cores. GPU versions of `UpdateMAllTwo` and `CalculateMAll` would need to achieve >10× over the 4-thread CPU baseline to justify the offload overhead for Ne=32. At Ne=100 (middle case) the kernels are O(Ne²)–O(Ne³) and the arithmetic intensity is much higher, making GPU far more attractive there.
+
+---
+
+## Step 6 — MPI strong scaling experiment
+
+To measure strong scaling with MPI (fixed problem, more ranks):
 
 1. Fix `NVMCSample=192`, `NSROptItrStep=20` in `zmodpara.def`.
-2. Run with `NSplitSize=1` (all ranks in one group) through the rank counts you care about, keeping `nranks = k × NSplitSize`.
-3. Record `Timer[0]` (the `All` row) for each run.
-4. Plot wall time vs rank count; ideal scaling halves time on each doubling.
+2. Run with increasing rank counts, keeping `nranks` a multiple of `NSplitSize`.
+3. Record `Timer[0]` (`All`) for each run.
+4. Ideal scaling: wall time halves each time ranks double.
 
-Note: `NSplitSize` controls how many independent MC groups there are. With `nranks=128, NSplitSize=4`, you get 32 groups of 4 ranks each — the 4 ranks within each group are only used if the ScaLAPACK solver is active (no `-D_lapack`). With `-D_lapack`, all MC groups run independently and only communicate during `WeightAverage`.
+Note: `NSplitSize` controls how many independent MC groups there are. With `nranks=128, NSplitSize=4`, you get 32 groups of 4 ranks each — the 4 ranks within each group are only used by ScaLAPACK (no `-D_lapack`). With `-D_lapack`, all MC groups run independently and communicate only during `WeightAverage`.
 
 ---
 
@@ -156,9 +218,9 @@ Note: `NSplitSize` controls how many independent MC groups there are. With `nran
 
 | Lever | Effect |
 |---|---|
-| Increase `OMP_NUM_THREADS` | Parallelizes inner loops (`UpdateMAllTwo`, `UpdateMAll`) via OpenMP |
-| Increase MPI ranks (more groups) | More MC samples per SR step → better statistics, same wall time |
-| Increase `NVMCSample` | More samples per group → lower variance, linear cost increase |
+| `OMP_NUM_THREADS` = physical core count | Parallelizes hot kernels; hyperthreading hurts, so don't exceed physical cores |
+| Increase MPI ranks (more groups) | More independent MC samples per SR step → linear wall-time reduction |
+| Increase `NVMCSample` | More samples per group → lower variance; cost scales linearly |
 | Reduce `NSPGaussLeg` | Fewer spin-projection quadrature points → smaller `NQPFull`, faster `CalculateMAll` |
 | Reduce `NMPTrans` | Fewer momentum-projection operators → smaller `NQPFull` |
-| GPU port of `UpdateMAllTwo` | Targets the single biggest hotspot; O(Ne²) per move |
+| GPU port of `UpdateMAllTwo` | Primary target: O(Ne²) per move, 43% of total in middle case, scales well |
