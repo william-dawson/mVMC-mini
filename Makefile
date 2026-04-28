@@ -1,6 +1,7 @@
 VMC    := src/vmc.out
 TINY   := job_tiny
 MIDDLE := job_middle
+LARGE  := job_large
 REF    := result/Lx4Ly4_J1.0
 
 # Override these on the command line:
@@ -9,7 +10,7 @@ REF    := result/Lx4Ly4_J1.0
 NRANKS   ?= 1
 NTHREADS ?= 1
 
-.PHONY : mac intel kei kashiwa pgi clean test perf bench
+.PHONY : mac intel kei kashiwa pgi clean test perf bench large
 
 # ---- Build targets (delegate to src/) ----
 
@@ -103,3 +104,34 @@ bench :
 	    printf "WeightAverage  / All:           %.1f%%\n", 100*wavg/total; \
 	  }' \
 	$(MIDDLE)/Lx10Ly10_J1.0/zvo_HitachiTimer.dat
+
+# ---- GPU benchmark (job_large) ----
+# 16x16 Kondo lattice: Nsite=512, Ne=256, NQPFull=64, NVMCSample=512, NSplitSize=1.
+# Designed for multi-GPU runs: one MPI rank per GPU, each rank is an independent MC group.
+# Example: make large NRANKS=8 NTHREADS=1   (8 GPUs, 1 CPU thread per rank)
+
+large :
+	@test -x $(VMC) || { echo "ERROR: $(VMC) not found — run a build target first (e.g. make mac)"; exit 1; }
+	@echo "=== job_large: $(NRANKS) rank(s) x $(NTHREADS) thread(s) ==="
+	@cd $(LARGE) && OMP_NUM_THREADS=$(NTHREADS) mpirun -np $(NRANKS) ../$(VMC) multiDir.def 2>/dev/null
+	@echo "=== Timer ==="
+	@cat $(LARGE)/Lx16Ly16_J1.0/zvo_HitachiTimer.dat
+	@echo ""
+	@echo "=== Key ratios ==="
+	@awk ' \
+	  /^All /           { total=$$NF } \
+	  /VMCMakeSample /  { samp=$$NF } \
+	  /exchange update/ { exch=$$NF } \
+	  /UpdateMAllTwo /  { umall=$$NF } \
+	  /VMCMainCal /     { cal=$$NF } \
+	  /CalculateMAll /  { pfcal=$$NF } \
+	  /WeightAverage /  { wavg=$$NF } \
+	  END { \
+	    printf "VMCMakeSample  / All:           %.1f%%\n", 100*samp/total; \
+	    printf "exchange update/ VMCMakeSample: %.1f%%\n", 100*exch/samp; \
+	    printf "UpdateMAllTwo  / All:           %.1f%%\n", 100*umall/total; \
+	    printf "VMCMainCal     / All:           %.1f%%\n", 100*cal/total; \
+	    printf "CalculateMAll  / VMCMainCal:    %.1f%%\n", 100*pfcal/cal; \
+	    printf "WeightAverage  / All:           %.1f%%\n", 100*wavg/total; \
+	  }' \
+	$(LARGE)/Lx16Ly16_J1.0/zvo_HitachiTimer.dat

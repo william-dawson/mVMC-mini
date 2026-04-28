@@ -19,7 +19,15 @@ make bench                         # 1 rank, 1 thread
 make bench NRANKS=128 NTHREADS=8   # production config
 ```
 
-Runs `job_middle` (200-site system) with the given settings and prints the full timer breakdown and hotspot ratios.
+Runs `job_middle` (200-site system, Ne=100) with the given settings and prints the full timer breakdown and hotspot ratios.
+
+## GPU / multi-GPU benchmark (job_large)
+
+```bash
+make large NRANKS=8    # 8 GPUs, 1 thread per rank
+```
+
+Runs `job_large` (512-site system, Ne=256, NVMCSample=512, NSplitSize=1). Each MPI rank is one independent MC group — designed so each rank maps to one GPU. Weak scaling: N ranks × N GPUs gives N× more MC samples in the same wall time with no inter-GPU communication until the final scalar `WeightAverage`.
 
 ## Interpreting the output
 

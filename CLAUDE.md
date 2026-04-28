@@ -42,9 +42,10 @@ The two bundled third-party libraries each have their own sub-Makefiles:
 The top-level `Makefile` provides workflow targets:
 
 ```bash
-make test                          # run job_tiny, verify against reference output
-make perf [NRANKS=N] [NTHREADS=N]  # run job_tiny, print timer + hotspot ratios
+make test                           # run job_tiny, verify against reference output
+make perf  [NRANKS=N] [NTHREADS=N] # run job_tiny, print timer + hotspot ratios
 make bench [NRANKS=N] [NTHREADS=N] # run job_middle, print timer + hotspot ratios
+make large [NRANKS=N] [NTHREADS=N] # run job_large (GPU / multi-GPU benchmark)
 ```
 
 `NRANKS` and `NTHREADS` default to 1. `make test` always runs with 1 rank and 1 thread for deterministic reference comparison.
@@ -60,9 +61,19 @@ src/vmc.out <multiDir.def>
 - `zlocspn.def`, `zinteraction.def`, `zcisajs.def`, `zcisajscktalt.def` — Hamiltonian/observable definitions
 - `zgutzwilleridx.def`, `zqptransidx.def` — variational parameter index maps
 
-Two benchmark cases are included:
-- `job_tiny/` — 32-site system (4×4 Kondo lattice, Ne=16), runs in a few seconds single-rank
-- `job_middle/` — 200-site system (10×10 Kondo lattice, Ne=100), reference config: 128 ranks × 8 threads
+Three benchmark cases are included:
+
+| | `job_tiny` | `job_middle` | `job_large` |
+|---|---|---|---|
+| Lattice | 4×4 | 10×10 | 16×16 |
+| Nsite | 32 | 200 | 512 |
+| Ne (Nelectron) | 16 | 100 | 256 |
+| NQPFull | 16 | 48 | 64 |
+| NVMCSample | 192 | 192 | 512 |
+| NSplitSize | 1 | 4 | 1 |
+| Purpose | correctness test | CPU baseline | GPU / multi-GPU scaling |
+
+`job_large` uses `NSplitSize=1` so each MPI rank is an independent MC group, mapping directly to one GPU per rank.
 
 Reference output for correctness checking lives in `result/`.
 
