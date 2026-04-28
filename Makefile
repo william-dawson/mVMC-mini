@@ -3,11 +3,11 @@ TINY   := job_tiny
 MIDDLE := job_middle
 REF    := result/Lx4Ly4_J1.0
 
-# Physical core count — used as default OMP thread count
-NCORES := $(shell sysctl -n hw.physicalcpu 2>/dev/null || nproc 2>/dev/null || echo 4)
-
-# MPI rank count for bench target — override with: make bench NRANKS=128
-NRANKS ?= 4
+# Override these on the command line:
+#   make perf  NRANKS=4 NTHREADS=8
+#   make bench NRANKS=128 NTHREADS=8
+NRANKS   ?= 1
+NTHREADS ?= 1
 
 .PHONY : mac intel kei kashiwa pgi clean test perf bench
 
@@ -32,40 +32,30 @@ clean :
 	$(MAKE) -C src clean
 
 # ---- Correctness test ----
-# Runs job_tiny (1 thread) and checks all 20 energy steps are within 5% of reference.
+# Runs job_tiny (1 rank, 1 thread) and checks all 20 energy steps are within 5% of reference.
 
 test :
 	@test -x $(VMC) || { echo "ERROR: $(VMC) not found — run a build target first (e.g. make mac)"; exit 1; }
 	@echo "=== Running job_tiny ==="
-	@cd $(TINY) && OMP_NUM_THREADS=1 ../$(VMC) multiDir.def 2>&1 | grep -v fileInitPara; \
+	@cd $(TINY) && OMP_NUM_THREADS=1 mpirun -np 1 ../$(VMC) multiDir.def 2>&1 | grep -v fileInitPara; \
 	paste Lx4Ly4_J1.0/zvo_out_000.dat ../$(REF)/zvo_out_000.dat | \
 	awk 'BEGIN{fail=0} \
 	  { d=$$1-$$4; if(d<0)d=-d; ref=($$4<0)?-$$4:$$4; pct=100*d/ref; \
 	    if(pct>5){printf "FAIL step %d: got %g ref %g (%.1f%%)\n",NR,$$1,$$4,pct; fail=1} } \
 	  END{if(!fail)printf "PASS: all %d steps within 5%% of reference\n",NR; exit fail}'
 
-# ---- Thread scaling ----
-# Sweeps OMP_NUM_THREADS over powers of 2 up to NCORES, then prints key ratios.
+# ---- Performance run (job_tiny) ----
+# Runs job_tiny with the given NRANKS and NTHREADS, then prints the timer and key ratios.
+# Example: make perf NRANKS=4 NTHREADS=8
 
 perf :
 	@test -x $(VMC) || { echo "ERROR: $(VMC) not found — run a build target first (e.g. make mac)"; exit 1; }
-	@echo "=== Thread scaling on job_tiny ($(NCORES) physical cores) ==="
-	@echo "Threads  Wall(s)  Speedup  Efficiency"
-	@echo "-------  -------  -------  ----------"
-	@cd $(TINY) && \
-	base=""; last=-1; \
-	for t in 1 2 4 8 16 32 64 $(NCORES); do \
-	  [ $$t -gt $(NCORES) ] && continue; \
-	  [ $$t -eq $$last ] && continue; \
-	  last=$$t; \
-	  OMP_NUM_THREADS=$$t ../$(VMC) multiDir.def 2>/dev/null; \
-	  wall=$$(awk '/^All / {print $$NF}' Lx4Ly4_J1.0/zvo_HitachiTimer.dat); \
-	  [ -z "$$base" ] && base=$$wall; \
-	  awk -v t=$$t -v w=$$wall -v b=$$base \
-	    'BEGIN{sp=b/w; printf "%-7d  %-8.3f  %-7.2fx  %s\n", t, w, sp, sprintf("%.0f%%",100*sp/t)}'; \
-	done
+	@echo "=== job_tiny: $(NRANKS) rank(s) x $(NTHREADS) thread(s) ==="
+	@cd $(TINY) && OMP_NUM_THREADS=$(NTHREADS) mpirun -np $(NRANKS) ../$(VMC) multiDir.def 2>/dev/null
+	@echo "=== Timer ==="
+	@cat $(TINY)/Lx4Ly4_J1.0/zvo_HitachiTimer.dat
 	@echo ""
-	@echo "=== Key ratios (last run) ==="
+	@echo "=== Key ratios ==="
 	@awk ' \
 	  /^All /           { total=$$NF } \
 	  /VMCMakeSample /  { samp=$$NF } \
@@ -84,15 +74,14 @@ perf :
 	  }' \
 	$(TINY)/Lx4Ly4_J1.0/zvo_HitachiTimer.dat
 
-# ---- Full benchmark ----
-# Runs job_middle with NCORES threads and NRANKS MPI ranks.
-# Override ranks: make bench NRANKS=128
+# ---- Full benchmark (job_middle) ----
+# Runs job_middle with the given NRANKS and NTHREADS, then prints the timer and key ratios.
+# Example: make bench NRANKS=128 NTHREADS=8
 
 bench :
 	@test -x $(VMC) || { echo "ERROR: $(VMC) not found — run a build target first (e.g. make mac)"; exit 1; }
-	@echo "=== Running job_middle ($(NRANKS) ranks × $(NCORES) threads) ==="
-	@cd $(MIDDLE) && OMP_NUM_THREADS=$(NCORES) mpirun -np $(NRANKS) ../$(VMC) multiDir.def 2>/dev/null
-	@echo ""
+	@echo "=== job_middle: $(NRANKS) rank(s) x $(NTHREADS) thread(s) ==="
+	@cd $(MIDDLE) && OMP_NUM_THREADS=$(NTHREADS) mpirun -np $(NRANKS) ../$(VMC) multiDir.def 2>/dev/null
 	@echo "=== Timer ==="
 	@cat $(MIDDLE)/Lx10Ly10_J1.0/zvo_HitachiTimer.dat
 	@echo ""

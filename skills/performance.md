@@ -2,22 +2,24 @@
 
 **Prerequisite**: `src/vmc.out` must exist. Run a build target first (e.g. `make mac`).
 
-## Thread scaling
+## Performance run (job_tiny)
 
 ```bash
-make perf
+make perf                        # 1 rank, 1 thread (serial baseline)
+make perf NTHREADS=8             # 1 rank, 8 OpenMP threads
+make perf NRANKS=4 NTHREADS=8   # 4 MPI ranks, 8 threads each
 ```
 
-Sweeps `OMP_NUM_THREADS` over powers of 2 up to the detected physical core count, runs `job_tiny` at each, and prints a wall-time / speedup / efficiency table followed by key hotspot ratios.
+Runs `job_tiny` with the given settings and prints the full timer tree and key hotspot ratios.
 
-## Full benchmark
+## Full benchmark (job_middle)
 
 ```bash
-make bench              # 4 MPI ranks × detected core count threads
-make bench NRANKS=128   # override rank count
+make bench                         # 1 rank, 1 thread
+make bench NRANKS=128 NTHREADS=8   # production config
 ```
 
-Runs `job_middle` (200-site system) and prints the full timer breakdown and hotspot ratios.
+Runs `job_middle` (200-site system) with the given settings and prints the full timer breakdown and hotspot ratios.
 
 ## Interpreting the output
 
