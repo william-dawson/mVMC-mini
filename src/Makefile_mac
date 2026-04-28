@@ -1,0 +1,30 @@
+FC = mpif90
+CC = mpicc
+
+LIBOMP = /usr/local/opt/libomp
+
+CFLAGS  = -O2 -Xpreprocessor -fopenmp -I$(LIBOMP)/include
+FFLAGS  = -O2
+OPTION  = -D_mpi_use -D_lapack
+GFORTRAN_LIB = /usr/local/Cellar/gcc/15.1.0/lib/gcc/current
+LIB     = -framework Accelerate -L$(LIBOMP)/lib -lomp -L$(GFORTRAN_LIB) -lgfortran
+
+OUT     = vmc.out
+SRC     = vmcmain.c
+PFAPACK = pfapack/libpfapack.a
+SFMT    = sfmt/SFMT.o
+OBJS    = vmcmain.o $(PFAPACK) $(SFMT)
+
+.PHONY : all pfapack sfmt
+all : vmc.out
+
+vmc.out : vmcmain.o pfapack sfmt
+	$(CC) -o $(OUT) $(OBJS) $(LIB) -lmpi
+
+vmcmain.o : *.c *.h
+	$(CC) -c $(SRC) $(OPTION) $(CFLAGS)
+
+pfapack :
+	$(MAKE) -C pfapack -f Makefile_mac
+sfmt :
+	$(MAKE) -C sfmt -f Makefile_mac

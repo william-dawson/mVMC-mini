@@ -1,3 +1,6 @@
+mac :
+	$(MAKE) -f Makefile_mac
+
 ksw kashiwa :
 	$(MAKE) -f Makefile_kashiwa
 
