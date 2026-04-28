@@ -39,7 +39,7 @@ The timer output is a wall-clock tree. Key ratios to read:
 
 The hot kernels (`UpdateMAllTwo`, `CalculateMAll`, `CalculateNewPfMTwo2`) parallelize with OpenMP and will show better per-kernel speedup than the overall wall time. The gap between them is serial bookkeeping (move proposal, config updates) that is not parallelized and sets an Amdahl ceiling.
 
-Hyperthreading typically hurts for this workload — the kernels are compute- and memory-bound. If efficiency drops sharply above the physical core count, cap `OMP_NUM_THREADS` at physical cores.
+Hyperthreading typically hurts for this workload — the kernels are compute- and memory-bound. If efficiency drops sharply above the physical core count, cap `NTHREADS` at the physical core count.
 
 ### Signs of a problem
 
@@ -53,8 +53,8 @@ Hyperthreading typically hurts for this workload — the kernels are compute- an
 
 | Lever | Effect |
 |---|---|
-| `OMP_NUM_THREADS` | Set to physical core count for best single-node throughput |
-| More MPI ranks | Linear reduction in wall time; each rank group runs independent MC |
+| `NTHREADS` | Set to physical core count for best single-node throughput (`make perf NTHREADS=N`) |
+| `NRANKS` | More MPI rank groups → linear reduction in wall time; each group runs independent MC |
 | `NVMCSample` | More samples → lower variance, linear cost |
 | `NSPGaussLeg` / `NMPTrans` | Reduce quadrature points → smaller `NQPFull`, faster `CalculateMAll` |
 | GPU port of `UpdateMAllTwo` | Largest single hotspot; O(Ne²) per move, attractive at large Ne |
