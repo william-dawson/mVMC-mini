@@ -1,0 +1,30 @@
+FC = mpif90
+CC = mpicc
+
+LIB = -Wl,-rpath,/usr/lib64 -L/usr/lib64 -l:libflexiblas.so.3
+
+CFLAGS = -O3 -fopenmp -march=native
+FFLAGS = -O3 -fopenmp -march=native
+OPTION = -D_mpi_use -D_lapack
+
+OUT = vmc.out
+SRC = vmcmain.c
+PFAPACK = pfapack/libpfapack.a
+SFMT = sfmt/SFMT.o
+OBJS = vmcmain.o $(PFAPACK) $(SFMT)
+
+.PHONY : all pfapack sfmt
+
+all : vmc.out
+
+vmc.out : vmcmain.o pfapack sfmt
+	$(FC) -o $(OUT) $(OBJS) $(FFLAGS) $(LIB)
+
+vmcmain.o : *.c *.h
+	$(CC) -c $(SRC) $(OPTION) $(CFLAGS)
+
+pfapack :
+	$(MAKE) -C pfapack -f Makefile_gnu
+
+sfmt :
+	$(MAKE) -C sfmt -f Makefile_gnu
