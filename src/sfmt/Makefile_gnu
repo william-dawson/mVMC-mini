@@ -1,6 +1,6 @@
 OBJ = SFMT.o
 CC = gcc
-CFLAGS = -O3 -msse2
+CFLAGS = -O3 -msse2 -fPIC
 OPTION = -DMEXP=19937 -DHAVE_SSE2
 
 $(OBJ): SFMT.c

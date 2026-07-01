@@ -13,7 +13,7 @@ PFAPACK = pfapack/libpfapack.a
 SFMT = sfmt/SFMT.o
 OBJS = vmcmain.o $(PFAPACK) $(SFMT)
 
-.PHONY : all pfapack sfmt
+.PHONY : all pfapack sfmt clean
 
 all : vmc.out
 
@@ -28,3 +28,8 @@ pfapack :
 
 sfmt :
 	$(MAKE) -C sfmt -f Makefile_gnu
+
+clean :
+	-rm -f *.o vmc.out
+	-rm -f pfapack/*.o pfapack/libpfapack.a
+	-rm -f sfmt/*.o

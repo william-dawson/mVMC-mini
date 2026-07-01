@@ -18,7 +18,7 @@ OBJECTS = dlasktrd.o dlasktrf.o \
 	 dsktf2.o dsktrd.o dsktrf.o
 
 FORT = gfortran
-FFLAGS = -O3 -fimplicit-none
+FFLAGS = -O3 -fimplicit-none -fPIC
 
 all: $(OBJECTS)
 	$(AR) rvu libpfapack.a $(OBJECTS)
