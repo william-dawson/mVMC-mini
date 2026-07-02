@@ -19,7 +19,7 @@ OBJS = vmcmain.o $(PFAPACK) $(SFMT)
 all : vmc.out
 
 vmc.out : vmcmain.o pfapack sfmt
-	$(FC) -o $(OUT) $(OBJS) $(FFLAGS) $(LIB)
+	$(FC) -o $(OUT) $(OBJS) $(FFLAGS) $(LIB) -Mnomain
 
 vmcmain.o : *.c *.h
 	$(CC) -c $(SRC) $(OPTION) $(CFLAGS)
