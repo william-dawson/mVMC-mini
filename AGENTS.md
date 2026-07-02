@@ -45,7 +45,24 @@ Each bullet should state what was done and where to look for details — no long
 - **Run with `srun`** (not `mpirun`): Intel MPI integrates natively with Slurm. `srun --ntasks=N ./vmc.out multiDir.def` works without `--mpi=pmi2`.
 - **sbatch path note:** `$HOME` is NOT expanded in `#SBATCH` directives on Hokusai — always use absolute paths (`/home/wddawson/...`) in `--chdir`, `--output`, `--error`.
 - **Repo on Hokusai:** `~/fugaku_next/mVMC-mini` (branch `gpu-port`).
-- Sanity check passed 2026-07-02: energy converges monotonically, output matches reference trajectory (MC stochasticity means values differ but trend matches).
+- Correctness check passed 2026-07-02: energy converges monotonically, output matches reference trajectory (MC stochasticity means values differ but trend matches).
+
+## Hokusai MPI×OMP performance (Xeon Platinum 8480+, 112 physical cores)
+
+**Job:** `job_middle/Lx10Ly10_J1.0`, ITR_STEP=3, NSROptItrSmp=1, NSplitSize=NP (same conditions as Genoa study).
+**Results directory:** `~/fugaku_next/mVMC-mini/perf_hokusai/`
+
+| NP | OMP | VMCMake(s) | VMCMain(s) | Total(s) |
+|----|-----|-----------|-----------|---------|
+| 1  | 1   | 170.47    | 47.42     | 221.48  |
+| 1  | 48  | 3.68      | 2.72      | **6.73** |
+| 4  | 28  | 3.66      | 0.75      | **4.53** |
+
+**vs Genoa (EPYC 9684X):** NP=1/OMP=48 → Hokusai 6.73s vs Genoa 11.99s (**1.8× faster**). VMCMakeSample dominates: 3.68s vs 9.96s — MKL + AVX-512 (Sapphire Rapids) vs OpenBLAS (Zen4).
+
+**Performance sanity check passed 2026-07-02:** Hokusai is faster than Genoa at equivalent config; confirms Intel build is healthy.
+
+**Note:** `multiDir.def` must use the absolute WDIR path (not `.`). `srun` inherits the CWD from `pre_launch`, not from the per-case directory. Use `printf "1\n$WDIR xnamelist.def opt.init\n"` in the perf script.
 
 ## Genoa MPI×OMP scaling (EPYC 9684X, 96 physical cores)
 
