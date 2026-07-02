@@ -20,6 +20,14 @@ Each bullet should state what was done and where to look for details — no long
 - **Build job:** submit to the `genoa` partition; compile on the node so `-march=native` resolves to znver4 (EPYC 9684X).
 - Module load: `module load system/genoa mpi/mpich-x86_64`
 
+## Building (GPU target — ng-dgx GB10 Grace Blackwell, aarch64)
+
+- **Makefile:** `src/Makefile_ngdgx` — NVHPC 26.3 (`nvc`/`nvfortran`), BLAS/LAPACK from NVHPC SDK at `/opt/nvidia/hpc_sdk/Linux_aarch64/26.3/compilers/lib`, `-mp` for OpenMP, `-tp native` for GB10 target, `-D_lapack`.
+- **Key flags:** `-Mnomain` on the link step — `nvfortran` injects `f90main.o` which conflicts with the C `main`; this is the NVHPC equivalent of Intel's `-nofor-main`.
+- **Sub-library flags:** `pfapack/Makefile_nvhpc` and `sfmt/Makefile_nvhpc`. SFMT compiled without SSE2 (aarch64 has no x86 SIMD); plain C fallback is sufficient.
+- **OS:** Ubuntu (not Rocky Linux) — binaries built here will not run on Genoa nodes and vice versa.
+- Module load: `module load system/ng-dgx nvhpc`
+
 ## Running
 
 - **Tiny benchmark:** `cd job_tiny && mpirun -np 4 ../src/vmc.out multiDir.def`
