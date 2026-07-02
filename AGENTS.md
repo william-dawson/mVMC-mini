@@ -34,3 +34,20 @@ Each bullet should state what was done and where to look for details — no long
 - The message `Error: opt.init does not exist` is expected and harmless (documented in README).
 - Output lands in `job_tiny/Lx4Ly4_J1.0/zvo_out_000.dat`; compare column 1 (energy) against `result/Lx4Ly4_J1.0/zvo_out_000.dat`. Values differ by run due to MC stochasticity but the converging trend must match.
 - **Medium benchmark:** `job_middle/` — use this for timing baselines before and after GPU changes.
+- **Binaries are architecture-specific:** Genoa binary (x86-64) will not run on ng-dgx (aarch64) and vice versa. Always build on the target partition before running.
+
+## Genoa MPI×OMP scaling (EPYC 9684X, 96 physical cores)
+
+Study: `~/fugaku_next/port_mvmc_gpu/scaling_genoa.sh`, job_middle benchmark, NSROptItrStep=3, NSplitSize=NP (fixed total samples=192). Script: `~/fugaku_next/port_mvmc_gpu/scaling_genoa.sh`; results in `~/fugaku_next/port_mvmc_gpu/scaling_results/`.
+
+**Recommended: NP=48, OMP=2** — best total time (9.83s, 37.5× faster than NP=1). NP=96×OMP=1 (pure MPI) is slightly worse (10.98s) due to rank-communication overhead.
+
+Timing profile at NP=1 (baseline): VMCMakeSample=325s (88%), CalculateMAll=27s (7.5%), UpdateSlaterElm=0.02s (negligible). Both VMCMakeSample and CalculateMAll scale well across MPI ranks. UpdateSlaterElm is not a time-sink in this benchmark.
+
+| NP | OMP | Total(s) | Speedup |
+|----|-----|----------|---------|
+| 1  | 96  | 368.9    | 1.0×    |
+| 8  | 12  | 51.9     | 7.1×    |
+| 16 | 6   | 27.3     | 13.5×   |
+| 48 | 2   | 9.8      | **37.5×** |
+| 96 | 1   | 11.0     | 33.6×   |
