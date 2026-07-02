@@ -36,6 +36,17 @@ Each bullet should state what was done and where to look for details — no long
 - **Medium benchmark:** `job_middle/` — use this for timing baselines before and after GPU changes.
 - **Binaries are architecture-specific:** Genoa binary (x86-64) will not run on ng-dgx (aarch64) and vice versa. Always build on the target partition before running.
 
+## Building (CPU baseline — Hokusai HBW2, Intel Xeon, x86_64)
+
+- **Makefile:** `src/Makefile_hokusai` — Intel oneAPI 2025.3 (`mpiicx`/`mpiifx`), MKL via `-qmkl`, `-qopenmp -xHost`, `-nofor-main` on link step, `-D_lapack`.
+- **Sub-library flags:** `pfapack/Makefile_intel` (`ifx -implicitnone -xHost -fPIC`) and `sfmt/Makefile_intel` (`icx -xHost -fPIC -DHAVE_SSE2`). Note: ifx uses `-implicitnone` (Intel style), not `-fimplicit-none` (GNU style).
+- **Module load:** `module load intel/25.3.0` — auto-loads `intelmpi`; gives `mpiicx`, `mpiifx`, MKL at `$MKLROOT`.
+- **Do not use `mpiicc`** — wraps deprecated `icc` (not installed in oneAPI 2025); use `mpiicx` instead.
+- **Run with `srun`** (not `mpirun`): Intel MPI integrates natively with Slurm. `srun --ntasks=N ./vmc.out multiDir.def` works without `--mpi=pmi2`.
+- **sbatch path note:** `$HOME` is NOT expanded in `#SBATCH` directives on Hokusai — always use absolute paths (`/home/wddawson/...`) in `--chdir`, `--output`, `--error`.
+- **Repo on Hokusai:** `~/fugaku_next/mVMC-mini` (branch `gpu-port`).
+- Sanity check passed 2026-07-02: energy converges monotonically, output matches reference trajectory (MC stochasticity means values differ but trend matches).
+
 ## Genoa MPI×OMP scaling (EPYC 9684X, 96 physical cores)
 
 **Final script:** `~/fugaku_next/port_mvmc_gpu/scaling_genoa.sh` (v6). Results in `~/fugaku_next/port_mvmc_gpu/scaling_results5/`.
