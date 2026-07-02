@@ -38,16 +38,28 @@ Each bullet should state what was done and where to look for details — no long
 
 ## Genoa MPI×OMP scaling (EPYC 9684X, 96 physical cores)
 
-Study: `~/fugaku_next/port_mvmc_gpu/scaling_genoa.sh`, job_middle benchmark, NSROptItrStep=3, NSplitSize=NP (fixed total samples=192). Script: `~/fugaku_next/port_mvmc_gpu/scaling_genoa.sh`; results in `~/fugaku_next/port_mvmc_gpu/scaling_results/`.
+**Final script:** `~/fugaku_next/port_mvmc_gpu/scaling_genoa.sh` (v6). Results in `~/fugaku_next/port_mvmc_gpu/scaling_results5/`.
 
-**Recommended: NP=48, OMP=2** — best total time (9.83s, 37.5× faster than NP=1). NP=96×OMP=1 (pure MPI) is slightly worse (10.98s) due to rank-communication overhead.
+**Critical binding notes:**
+- `NQPFull = NSPGaussLeg × NMPTrans = 12 × 4 = 48` for job_middle — the OMP loop over `qpidx` has only 48 iterations; OMP>48 wastes threads.
+- MPICH's `-bind-to core` pins each rank to **1 core** (OMP threads serialize). Fix: use a `taskset` wrapper reading `$PMI_RANK` to assign non-overlapping CPU ranges. See `~/fugaku_next/port_mvmc_gpu/bind_wrapper.sh`.
+- `NSplitSize=NP` puts all NP ranks in one collaborative group dividing the QP work per MC step. `NSplitSize=1` (default) makes each rank independent — correct for production throughput, wrong for wall-time scaling study.
+- mpirun `--rankfile` is OpenMPI only; MPICH Hydra does not support it.
+- srun without `--mpi=pmi2` creates isolated single-rank MPI jobs from each task.
 
-Timing profile at NP=1 (baseline): VMCMakeSample=325s (88%), CalculateMAll=27s (7.5%), UpdateSlaterElm=0.02s (negligible). Both VMCMakeSample and CalculateMAll scale well across MPI ranks. UpdateSlaterElm is not a time-sink in this benchmark.
+**Amdahl bottleneck:** The serial Markov chain work (MC moves, PRNG, accept/reject) is ~8s regardless of NP — it dominates. MPI only helps the QP calculation (VMCMainCal, 16% of time). Max wall-time speedup from MPI ≈ 1.3×.
 
-| NP | OMP | Total(s) | Speedup |
-|----|-----|----------|---------|
-| 1  | 96  | 368.9    | 1.0×    |
-| 8  | 12  | 51.9     | 7.1×    |
-| 16 | 6   | 27.3     | 13.5×   |
-| 48 | 2   | 9.8      | **37.5×** |
-| 96 | 1   | 11.0     | 33.6×   |
+**Recommended config (wall time):** NP=12–24, OMP=4–8 — best total ~9.1s (vs 12.0s at NP=1). Plateau is flat from NP=8 to NP=48.
+
+**Recommended config (production throughput):** `NSplitSize=1`, `NP=2`, `OMP=48` — independent chains scale perfectly; OMP=48 saturates NQPFull=48.
+
+| NP | OMP | VMCMake | VMCMain | Total(s) |
+|----|-----|---------|---------|----------|
+| 1  | 48  | 9.96    | 1.97    | 11.99    |
+| 8  | 12  | 8.55    | 0.84    | 9.58     |
+| 12 | 8   | 8.21    | 0.75    | **9.19** |
+| 24 | 4   | 8.12    | 0.75    | **9.14** |
+| 48 | 2   | 8.19    | 0.76    | 9.29     |
+| 96 | 1   | 9.55    | 0.82    | 10.97    |
+
+**GPU porting note:** CalculateMAll = 0.92s (7.7% of total at NP=1, OMP=48). GPU won't shift the 8s serial MC work. Larger system sizes needed to see meaningful GPU speedup.
