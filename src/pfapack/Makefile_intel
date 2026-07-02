@@ -17,8 +17,8 @@ OBJECTS = dlasktrd.o dlasktrf.o \
 	 dskmv.o dskpfa.o dskr2.o dskr2k.o dsktd2.o \
 	 dsktf2.o dsktrd.o dsktrf.o
 
-FORT = ifort
-FFLAGS = -O3 -implicitnone -xSSE2
+FORT = ifx
+FFLAGS = -O3 -fimplicit-none -xHost -fPIC
 
 all: $(OBJECTS)
 	$(AR) rvu libpfapack.a $(OBJECTS)
